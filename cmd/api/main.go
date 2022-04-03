@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
+	"sirauth/pkg/entities"
+	"sirauth/pkg/routes"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/template/html"
 	"github.com/jackc/pgx/v4/pgxpool"
-	"os"
-	"sirauth/pkg/entities"
 
 	"github.com/elliotchance/pie/v2"
 	"github.com/go-redis/redis"
@@ -41,15 +43,9 @@ func main() {
 		Views: engine,
 	})
 
-	app.Get("/clients/:clientId", func(ctx *fiber.Ctx) error {
-		clientId := ctx.Params("clientId")
-		client, err := entities.GetByClientID(dbpool, clientId)
-		if err != nil {
-			return err
-		}
+	clientRoutes := routes.NewClientRoutes(dbpool)
 
-		return ctx.JSON(client)
-	})
+	clientRoutes.AddRoutes(app)
 
 	app.Get("/authorize", func(ctx *fiber.Ctx) error {
 		clientId := ctx.Query("client_id")

@@ -3,6 +3,7 @@ package entities
 import (
 	"context"
 	"fmt"
+
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
