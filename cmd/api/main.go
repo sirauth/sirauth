@@ -1,29 +1,38 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"os"
-	"sirauth/pkg/entities"
+	"log"
+	"sirauth/ent"
+	"sirauth/pkg/entities/realm"
 	"sirauth/pkg/routes"
 
+	"database/sql"
+
+	"entgo.io/ent/dialect"
+
+	entsql "entgo.io/ent/dialect/sql"
+	"github.com/go-redis/redis"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/template/html"
-	"github.com/jackc/pgx/v4/pgxpool"
-
-	"github.com/elliotchance/pie/v2"
-	"github.com/go-redis/redis"
-	"github.com/google/uuid"
+	_ "github.com/jackc/pgx/v4/stdlib"
 )
+
+func Open(dsn string) *ent.Client {
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Create an ent.Driver from `db`.
+	drv := entsql.OpenDB(dialect.Postgres, db)
+	return ent.NewClient(ent.Driver(drv))
+}
 
 func main() {
 	dsn := "host=localhost user=sirauth password=Password01 dbname=sirauth sslmode=disable"
-	dbpool, err := pgxpool.Connect(context.Background(), dsn)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
-		os.Exit(1)
-	}
-	defer dbpool.Close()
+	dbClient := Open(dsn)
+
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
 		Password: "",
@@ -43,41 +52,43 @@ func main() {
 		Views: engine,
 	})
 
-	clientRoutes := routes.NewClientRoutes(dbpool)
+	clientRoutes := routes.NewClientRoutes(dbClient)
+	realmRoutes := realm.NewRoutes(dbClient)
 
 	clientRoutes.AddRoutes(app)
+	realmRoutes.AddRoutes(app)
+	/*
+		app.Get("/authorize", func(ctx *fiber.Ctx) error {
+			clientId := ctx.Query("client_id")
+			redirectUri := ctx.Query("redirect_uri")
 
-	app.Get("/authorize", func(ctx *fiber.Ctx) error {
-		clientId := ctx.Query("client_id")
-		redirectUri := ctx.Query("redirect_uri")
+			if clientId == "" {
+				return ctx.Status(404).JSON(map[string]string{"error": "Invalid Client Id"})
+			}
 
-		if clientId == "" {
-			return ctx.Status(404).JSON(map[string]string{"error": "Invalid Client Id"})
-		}
+			if redirectUri == "" {
+				return ctx.Status(404).JSON(map[string]string{"error": "Invalid Redirect URI"})
+			}
 
-		if redirectUri == "" {
-			return ctx.Status(404).JSON(map[string]string{"error": "Invalid Redirect URI"})
-		}
+			client, err := entities.GetClientByClientId(dbpool, clientId)
+			if err != nil {
+				return err
+			}
 
-		client, err := entities.GetByClientID(dbpool, clientId)
-		if err != nil {
-			return err
-		}
+			hasIt := pie.Contains(client.RedirectUrls, redirectUri)
+			if !hasIt {
+				return ctx.Status(401).JSON(map[string]string{"error": "Invalid Redirect URI"})
+			}
 
-		hasIt := pie.Contains(client.RedirectUrls, redirectUri)
-		if !hasIt {
-			return ctx.Status(401).JSON(map[string]string{"error": "Invalid Redirect URI"})
-		}
+			reqId := uuid.New().String()
+			err = redisClient.Set(reqId, ctx.Request().URI().QueryString(), 0).Err()
+			if err != nil {
+				return err
+			}
 
-		reqId := uuid.New().String()
-		err = redisClient.Set(reqId, ctx.Request().URI().QueryString(), 0).Err()
-		if err != nil {
-			return err
-		}
-
-		return ctx.Render("approve", nil)
-	})
-
+			return ctx.Render("approve", nil)
+		})
+	*/
 	err = app.Listen(":3000")
 	if err != nil {
 		panic(err)

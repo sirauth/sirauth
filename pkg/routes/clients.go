@@ -1,26 +1,29 @@
 package routes
 
 import (
-	"sirauth/pkg/entities"
+	"sirauth/ent"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 type ClientRoutes struct {
-	db *pgxpool.Pool
+	db *ent.Client
 }
 
-func NewClientRoutes(db *pgxpool.Pool) IRoutes {
+func NewClientRoutes(db *ent.Client) IRoutes {
 	return &ClientRoutes{
 		db,
 	}
 }
 
 func (c *ClientRoutes) AddRoutes(app *fiber.App) {
-	app.Get("/clients/:clientId", func(ctx *fiber.Ctx) error {
-		clientId := ctx.Params("clientId")
-		client, err := entities.GetByClientID(c.db, clientId)
+	app.Get("/clients/:id", func(ctx *fiber.Ctx) error {
+		id, err := ctx.ParamsInt("id", 0)
+		if err != nil {
+			return err
+		}
+
+		client, err := c.db.RealmOAuthClient.Get(ctx.Context(), id)
 		if err != nil {
 			return err
 		}
